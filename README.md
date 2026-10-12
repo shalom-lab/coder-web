@@ -6,9 +6,9 @@ Bookmarklet 规则编辑器（React + Vite）。用美化后的 JSON 编辑 `rul
 
 - Monaco 编辑 **规则 JSON**（缩进、换行、括号高亮、格式化）
 - 压缩并复制 bookmarklet；拖拽链接到书签栏
-- **保存到云端**：写入 BYOK 仓库根目录的 `rules.json`（需 `gh-coder-repo` + `gh-coder-token`）
-- 拉取 / 本地导入 / 导出
-- 兼容从旧版 `.js`（含 `ruleList`）导入
+- **保存到云端**：写入 BYOK 仓库根目录的 `rules.json`（仅规则数组）
+- **Go 书签**：压缩时会自动包上前后注入逻辑（`currentUrl.includes` → 写 `localStorage`），不是只塞 JSON
+- 拉取 / 本地导入 / 导出；导入兼容现有 `bookmarklet.js`
 
 ## BYOK（localStorage）
 

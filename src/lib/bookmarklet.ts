@@ -5,6 +5,9 @@ export type Rule = {
   storage: StorageItem[]
 }
 
+/** 云端规则文件（JSON 数组）；Go 书签另含完整注入 JS */
+export const REPO_FILE = 'rules.json'
+
 export const DEFAULT_RULES: Rule[] = [
   {
     urlpattern: 'github.io/Spark',
@@ -48,24 +51,80 @@ export function parseRulesJson(text: string): Rule[] {
   return data as Rule[]
 }
 
-/** 从旧版 bookmarklet JS 里尽量抽出 ruleList */
+/** 括号匹配取出数组字面量（跳过字符串） */
+function extractArrayLiteral(source: string, fromIndex: number): string | null {
+  let i = fromIndex
+  while (i < source.length && /\s/.test(source[i]!)) i++
+  if (source[i] !== '[') return null
+
+  let depth = 0
+  let inStr: '"' | "'" | '`' | null = null
+  let escape = false
+
+  for (let j = i; j < source.length; j++) {
+    const c = source[j]!
+    if (inStr) {
+      if (escape) {
+        escape = false
+        continue
+      }
+      if (c === '\\') {
+        escape = true
+        continue
+      }
+      if (c === inStr) inStr = null
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      inStr = c
+      continue
+    }
+    if (c === '[' || c === '{') depth++
+    else if (c === ']' || c === '}') {
+      depth--
+      if (depth === 0) return source.slice(i, j + 1)
+    }
+  }
+  return null
+}
+
+/** 从 bookmarklet.js 抽出 ruleList */
 export function extractRulesFromJs(js: string): Rule[] | null {
-  const match = js.match(/const\s+ruleList\s*=\s*(\[[\s\S]*?\]);/)
-  if (!match) return null
+  const m = js.match(/const\s+ruleList\s*=\s*/)
+  if (!m || m.index === undefined) return null
+  const literal = extractArrayLiteral(js, m.index + m[0].length)
+  if (!literal) return null
   try {
-    // 宽松：把近似 JSON 的 JS 对象字面量转成 JSON
-    const raw = match[1]
-      .replace(/(\w+)\s*:/g, '"$1":')
-      .replace(/'/g, '"')
-    return parseRulesJson(raw)
+    // JS 对象字面量（可无无引号/无引号键）→ 运行时取值
+    const data = new Function(`"use strict"; return (${literal});`)() as unknown
+    return parseRulesJson(JSON.stringify(data))
   } catch {
     return null
   }
 }
 
-export function buildBookmarkletSource(rules: Rule[]): string {
-  const rulesLiteral = JSON.stringify(rules)
-  return `(function(){const ruleList=${rulesLiteral};const currentUrl=window.location.href;ruleList.forEach(function(rule){if(currentUrl.includes(rule.urlpattern)){rule.storage.forEach(function(item){for(var key in item){var val=item[key];var saveVal=(typeof val==="object")?JSON.stringify(val):String(val);localStorage.setItem(key,saveVal);}});console.log("✅ Bookmarklet: 已为 "+rule.urlpattern+" 更新本地存储");}});})();`
+/** 云端/本地保存的可读 JS 源文件（与现有 bookmarklet.js 同结构） */
+export function buildBookmarkletFile(rules: Rule[]): string {
+  const indented = JSON.stringify(rules, null, 2).replace(/\n/g, '\n  ')
+  return `(function() {
+  const ruleList = ${indented};
+
+  const currentUrl = window.location.href;
+
+  ruleList.forEach(rule => {
+    if (currentUrl.includes(rule.urlpattern)) {
+      rule.storage.forEach(item => {
+        for (const key in item) {
+          const val = item[key];
+          const saveVal = (typeof val === 'object') ? JSON.stringify(val) : String(val);
+          localStorage.setItem(key, saveVal);
+        }
+      });
+      console.log('✅ Bookmarklet: 已为 ' + rule.urlpattern + ' 更新本地存储');
+    }
+  });
+})();
+`
 }
 
 export function minify(code: string): string {
@@ -84,5 +143,18 @@ export function toJavascriptUrl(code: string): string {
 }
 
 export function generateFromRules(rules: Rule[]): string {
-  return toJavascriptUrl(buildBookmarkletSource(rules))
+  return toJavascriptUrl(buildBookmarkletFile(rules))
+}
+
+/** 拉取/导入：JSON 数组或 bookmarklet.js 均可 */
+export function rulesFromFileContent(text: string): Rule[] {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('[')) {
+    return parseRulesJson(trimmed)
+  }
+  const fromJs = extractRulesFromJs(trimmed)
+  if (!fromJs) {
+    throw new Error('无法解析：需要 bookmarklet.js（含 ruleList）或规则 JSON 数组')
+  }
+  return fromJs
 }

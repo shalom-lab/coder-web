@@ -5,16 +5,15 @@ import { Toast } from './components/Toast'
 import {
   CACHE_KEYS,
   DEFAULT_RULES,
-  extractRulesFromJs,
+  REPO_FILE,
   generateFromRules,
   parseRulesJson,
   prettyJson,
+  rulesFromFileContent,
 } from './lib/bookmarklet'
 import { readByok, type ByokSettings } from './lib/byok'
 import { fetchRepoFile, putRepoFile } from './lib/github'
 import './App.css'
-
-const REPO_FILE = 'rules.json'
 
 export default function App() {
   const [byok, setByok] = useState<ByokSettings>(() => readByok())
@@ -67,16 +66,7 @@ export default function App() {
       reader.onload = () => {
         const text = String(reader.result ?? '')
         try {
-          if (file.name.endsWith('.js')) {
-            const rules = extractRulesFromJs(text)
-            if (!rules) {
-              showToast('无法从 JS 提取 ruleList')
-              return
-            }
-            setJsonText(prettyJson(rules))
-          } else {
-            setJsonText(prettyJson(parseRulesJson(text)))
-          }
+          setJsonText(prettyJson(rulesFromFileContent(text)))
           showToast('导入成功')
         } catch (e) {
           showToast(e instanceof Error ? e.message : '导入失败')
@@ -95,7 +85,7 @@ export default function App() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = REPO_FILE
+      a.download = 'rules.json'
       a.click()
       URL.revokeObjectURL(url)
       showToast('已导出到本地')
@@ -131,7 +121,7 @@ export default function App() {
     setBusy(true)
     try {
       const { content, sha } = await fetchRepoFile(byok, REPO_FILE)
-      setJsonText(prettyJson(parseRulesJson(content)))
+      setJsonText(prettyJson(rulesFromFileContent(content)))
       setFileSha(sha)
       showToast('已从仓库拉取')
     } catch (e) {
@@ -141,7 +131,7 @@ export default function App() {
     }
   }
 
-  /** 保存 = 写入仓库根目录 rules.json */
+  /** 保存 = 写入仓库根目录 rules.json（仅规则数据） */
   const handleSave = async () => {
     if (!byok.repo || !byok.token) {
       showToast('请先在设置中配置仓库与 Token')
