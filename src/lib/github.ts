@@ -94,10 +94,19 @@ export async function putRepoFile(
     headers: { ...headers(settings.token), 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
+    throw new Error('Token 无效或已过期，请到设置里更新')
+  }
+  if (res.status === 403) {
+    throw new Error('Token 无写权限，需 contents:write（或 classic 的 repo 权限）')
+  }
+  if (res.status === 404) {
     throw new Error(
-      'GitHub 鉴权失败，请检查 Token scope（需 contents:write）与仓库名',
+      `找不到仓库或无权访问：${settings.repo}（请确认设置里是 owner/name，且 Token 已授权该仓库）`,
     )
+  }
+  if (res.status === 409 || res.status === 422) {
+    throw new Error('文件冲突或 sha 过期，请先点「拉取」再保存')
   }
   if (!res.ok) {
     const err = await res.text()
