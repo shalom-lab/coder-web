@@ -87,7 +87,7 @@ export default function App() {
     input.click()
   }
 
-  const handleSaveLocal = () => {
+  const handleExportLocal = () => {
     try {
       const formatted = prettyJson(parseRulesJson(jsonText))
       setJsonText(formatted)
@@ -98,9 +98,9 @@ export default function App() {
       a.download = REPO_FILE
       a.click()
       URL.revokeObjectURL(url)
-      showToast('已保存')
+      showToast('已导出到本地')
     } catch (e) {
-      showToast(e instanceof Error ? e.message : '保存失败')
+      showToast(e instanceof Error ? e.message : '导出失败')
     }
   }
 
@@ -141,7 +141,13 @@ export default function App() {
     }
   }
 
-  const pushToGithub = async () => {
+  /** 保存 = 写入仓库根目录 rules.json */
+  const handleSave = async () => {
+    if (!byok.repo || !byok.token) {
+      showToast('请先在设置中配置仓库与 Token')
+      setSettingsOpen(true)
+      return
+    }
     setBusy(true)
     try {
       const formatted = prettyJson(parseRulesJson(jsonText))
@@ -152,15 +158,15 @@ export default function App() {
           const existing = await fetchRepoFile(byok, REPO_FILE)
           sha = existing.sha
         } catch {
-          // 新建文件
+          // 仓库里还没有该文件，创建新文件
         }
       }
       await putRepoFile(byok, REPO_FILE, formatted, `update ${REPO_FILE}`, sha)
       const latest = await fetchRepoFile(byok, REPO_FILE)
       setFileSha(latest.sha)
-      showToast('已推送到仓库')
+      showToast(`已保存到 ${byok.repo}/${REPO_FILE}`)
     } catch (e) {
-      showToast(e instanceof Error ? e.message : '推送失败')
+      showToast(e instanceof Error ? e.message : '保存失败')
     } finally {
       setBusy(false)
     }
@@ -261,20 +267,26 @@ export default function App() {
 
           <div className="panel-footer">
             <div className="btn-group">
-              <button type="button" onClick={handleImport}>
-                导入
-              </button>
-              <button type="button" disabled={!canSave} onClick={handleSaveLocal}>
-                保存
-              </button>
-              <button type="button" onClick={handleClear}>
-                清空
-              </button>
               <button type="button" disabled={busy || !byokReady} onClick={pullFromGithub}>
                 拉取
               </button>
-              <button type="button" disabled={busy || !byokReady || !canSave} onClick={pushToGithub}>
-                推送
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || !canSave}
+                onClick={handleSave}
+                title={byokReady ? `保存到 ${byok.repo}/${REPO_FILE}` : '需先配置 BYOK'}
+              >
+                保存到云端
+              </button>
+              <button type="button" onClick={handleImport}>
+                导入
+              </button>
+              <button type="button" disabled={!canSave} onClick={handleExportLocal}>
+                导出
+              </button>
+              <button type="button" onClick={handleClear}>
+                清空
               </button>
               <button type="button" onClick={injectByokIntoRules}>
                 填入密钥
