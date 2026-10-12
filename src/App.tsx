@@ -12,7 +12,7 @@ import {
   rulesFromFileContent,
 } from './lib/bookmarklet'
 import { readByok, type ByokSettings } from './lib/byok'
-import { fetchRepoFile, putRepoFile } from './lib/github'
+import { fetchRepoFile, putRepoFile, tryGetFileSha } from './lib/github'
 import './App.css'
 
 /** React 会拦截 href="javascript:..."，必须用 setAttribute 才能拖成书签 */
@@ -177,15 +177,8 @@ export default function App() {
     try {
       const formatted = prettyJson(parseRulesJson(jsonText))
       setJsonText(formatted)
-      let sha = fileSha
-      if (!sha) {
-        try {
-          const existing = await fetchRepoFile(byok, REPO_FILE)
-          sha = existing.sha
-        } catch {
-          // 仓库里还没有该文件，创建新文件
-        }
-      }
+      // 私库已有文件时更新必须带 sha；先探测，避免无权限时被误当成「文件不存在」
+      const sha = fileSha ?? (await tryGetFileSha(byok, REPO_FILE))
       await putRepoFile(byok, REPO_FILE, formatted, `update ${REPO_FILE}`, sha)
       const latest = await fetchRepoFile(byok, REPO_FILE)
       setFileSha(latest.sha)

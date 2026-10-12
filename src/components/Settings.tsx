@@ -69,7 +69,8 @@ export function Settings({ open, onClose, onSaved }: Props) {
         </div>
 
         <p className="hint">
-          密钥只存本机 <code>localStorage</code>。也可事先写入；启动时会自动读取。
+          密钥只存本机 <code>localStorage</code>。私有仓库必须用 PAT 授权该库（网页能看见不算数）；
+          fine-grained 勾选仓库 + Contents Read and write。
         </p>
 
         <label className="field">

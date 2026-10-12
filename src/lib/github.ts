@@ -5,7 +5,7 @@ const API = 'https://api.github.com'
 function headers(token: string): HeadersInit {
   return {
     Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${token.trim()}`,
     'X-GitHub-Api-Version': '2022-11-28',
   }
 }
@@ -41,19 +41,51 @@ function encodeBase64Utf8(text: string): string {
   return btoa(binary)
 }
 
-export async function fetchRepoFile(
-  settings: ByokSettings,
-  path: string,
-): Promise<{ content: string; sha: string }> {
+function accessDeniedMessage(repo: string): string {
+  return (
+    `Token 无法访问私有仓库 ${repo}。` +
+    `网页已登录能看见 ≠ API 有权限。` +
+    `请用 PAT：fine-grained 勾选该仓库 + Contents Read/Write；classic 需勾选 repo。`
+  )
+}
+
+/** 先确认仓库本身对 Token 可见（私库无权限时 GitHub 也会 404） */
+export async function assertRepoAccess(settings: ByokSettings): Promise<void> {
   if (!settings.repo || !settings.token) {
     throw new Error('请先在设置中填写仓库与 Token')
   }
   const { owner, name } = parseRepo(settings.repo)
+  const res = await fetch(`${API}/repos/${owner}/${name}`, {
+    headers: headers(settings.token),
+  })
+  if (res.status === 401) {
+    throw new Error('Token 无效或已过期，请到设置里更新')
+  }
+  if (res.status === 403) {
+    throw new Error('Token 无权限访问该仓库')
+  }
+  if (res.status === 404) {
+    throw new Error(accessDeniedMessage(settings.repo))
+  }
+  if (!res.ok) {
+    throw new Error(`检查仓库失败（${res.status}）`)
+  }
+}
+
+export async function fetchRepoFile(
+  settings: ByokSettings,
+  path: string,
+): Promise<{ content: string; sha: string }> {
+  await assertRepoAccess(settings)
+  const { owner, name } = parseRepo(settings.repo)
   const res = await fetch(pathUrl(owner, name, path), {
     headers: headers(settings.token),
   })
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('GitHub 鉴权失败，请检查 Token scope 与仓库名')
+  if (res.status === 401) {
+    throw new Error('Token 无效或已过期，请到设置里更新')
+  }
+  if (res.status === 403) {
+    throw new Error('Token 无读权限，需 Contents: Read')
   }
   if (res.status === 404) {
     throw new Error(`仓库中未找到文件：${path}`)
@@ -72,6 +104,30 @@ export async function fetchRepoFile(
   return { content: decodeBase64Utf8(data.content), sha: data.sha }
 }
 
+/** 文件不存在返回 undefined；仓库无权限会抛错 */
+export async function tryGetFileSha(
+  settings: ByokSettings,
+  path: string,
+): Promise<string | undefined> {
+  await assertRepoAccess(settings)
+  const { owner, name } = parseRepo(settings.repo)
+  const res = await fetch(pathUrl(owner, name, path), {
+    headers: headers(settings.token),
+  })
+  if (res.status === 404) return undefined
+  if (res.status === 401) {
+    throw new Error('Token 无效或已过期，请到设置里更新')
+  }
+  if (res.status === 403) {
+    throw new Error('Token 无读权限，需 Contents: Read')
+  }
+  if (!res.ok) {
+    throw new Error(`读取文件信息失败（${res.status}）`)
+  }
+  const data = (await res.json()) as { sha?: string }
+  return data.sha
+}
+
 export async function putRepoFile(
   settings: ByokSettings,
   path: string,
@@ -79,9 +135,7 @@ export async function putRepoFile(
   message: string,
   sha?: string,
 ): Promise<void> {
-  if (!settings.repo || !settings.token) {
-    throw new Error('请先在设置中填写仓库与 Token')
-  }
+  await assertRepoAccess(settings)
   const { owner, name } = parseRepo(settings.repo)
   const body: Record<string, string> = {
     message,
@@ -98,15 +152,13 @@ export async function putRepoFile(
     throw new Error('Token 无效或已过期，请到设置里更新')
   }
   if (res.status === 403) {
-    throw new Error('Token 无写权限，需 contents:write（或 classic 的 repo 权限）')
+    throw new Error('Token 无写权限，需 Contents: Write（或 classic 的 repo）')
   }
   if (res.status === 404) {
-    throw new Error(
-      `找不到仓库或无权访问：${settings.repo}（请确认设置里是 owner/name，且 Token 已授权该仓库）`,
-    )
+    throw new Error(accessDeniedMessage(settings.repo))
   }
   if (res.status === 409 || res.status === 422) {
-    throw new Error('文件冲突或 sha 过期，请先点「拉取」再保存')
+    throw new Error('文件冲突或缺少 sha，请先点「拉取」再保存')
   }
   if (!res.ok) {
     const err = await res.text()
