@@ -172,34 +172,6 @@ export default function App() {
     }
   }
 
-  const injectByokIntoRules = () => {
-    try {
-      const rules = parseRulesJson(jsonText)
-      if (!byok.repo && !byok.token) {
-        showToast('请先在设置中配置仓库/Token')
-        setSettingsOpen(true)
-        return
-      }
-      const first = rules[0] ?? {
-        urlpattern: window.location.host || 'example.com',
-        storage: [],
-      }
-      const storage = [...(first.storage ?? [])]
-      const upsert = (key: string, value: string) => {
-        const idx = storage.findIndex((item) => Object.prototype.hasOwnProperty.call(item, key))
-        if (idx >= 0) storage[idx] = { [key]: value }
-        else storage.push({ [key]: value })
-      }
-      if (byok.repo) upsert('gh-coder-repo', byok.repo)
-      if (byok.token) upsert('gh-coder-token', byok.token)
-      const next = [{ ...first, storage }, ...rules.slice(1)]
-      setJsonText(prettyJson(next))
-      showToast('已写入规则 JSON')
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : '写入失败')
-    }
-  }
-
   const byokReady = Boolean(byok.repo && byok.token)
   const canSave = jsonText.trim().length > 0
   const bookmarkName = name.trim() || 'Go'
@@ -287,9 +259,6 @@ export default function App() {
               </button>
               <button type="button" onClick={handleClear}>
                 清空
-              </button>
-              <button type="button" onClick={injectByokIntoRules}>
-                填入密钥
               </button>
             </div>
           </div>

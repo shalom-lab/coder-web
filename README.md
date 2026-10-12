@@ -19,7 +19,7 @@ Bookmarklet 规则编辑器（React + Vite）。用美化后的 JSON 编辑 `rul
 | `gh-coder-repo` | GitHub 仓库，格式 `owner/name` |
 | `gh-coder-token` | GitHub PAT（BYOK） |
 
-配置后可用 **拉取 / 推送** 同步仓库根目录的 `rules.json`。**填入密钥** 会把当前 BYOK 写入规则 JSON 的 `storage`。
+配置后可用 **拉取 / 保存到云端** 同步仓库根目录的 `rules.json`。
 
 ```js
 localStorage.setItem('gh-coder-repo', 'owner/name')
