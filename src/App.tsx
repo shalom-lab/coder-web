@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Settings } from './components/Settings'
 import { Toast } from './components/Toast'
@@ -14,6 +14,41 @@ import {
 import { readByok, type ByokSettings } from './lib/byok'
 import { fetchRepoFile, putRepoFile } from './lib/github'
 import './App.css'
+
+/** React 会拦截 href="javascript:..."，必须用 setAttribute 才能拖成书签 */
+function BookmarkDragLink({
+  href,
+  label,
+  onClickHint,
+}: {
+  href: string
+  label: string
+  onClickHint: () => void
+}) {
+  const ref = useRef<HTMLAnchorElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !href) return
+    el.setAttribute('href', href)
+  }, [href])
+
+  return (
+    <a
+      ref={ref}
+      className="bookmark-preview"
+      href="#"
+      title="拖拽到书签栏使用（不要在本页点击）"
+      draggable
+      onClick={(e) => {
+        e.preventDefault()
+        onClickHint()
+      }}
+    >
+      {label}
+    </a>
+  )
+}
 
 export default function App() {
   const [byok, setByok] = useState<ByokSettings>(() => readByok())
@@ -258,14 +293,11 @@ export default function App() {
           <div className="panel-header">
             <span>生成结果</span>
             {output ? (
-              <a
-                className="bookmark-preview"
+              <BookmarkDragLink
                 href={output}
-                title="拖拽到书签栏"
-                onClick={(e) => e.preventDefault()}
-              >
-                {bookmarkName}
-              </a>
+                label={bookmarkName}
+                onClickHint={() => showToast('请拖到浏览器书签栏，勿在本页点击')}
+              />
             ) : null}
           </div>
 
