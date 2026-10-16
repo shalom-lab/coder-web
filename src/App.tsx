@@ -282,12 +282,10 @@ export default function App() {
             </div>
             <div className="panel-header-actions">
               {editorMode === 'json' ? (
-                <button type="button" onClick={formatJson}>
+                <button type="button" className="header-chip-btn" onClick={formatJson}>
                   格式化
                 </button>
-              ) : (
-                <span className="tag">手风琴</span>
-              )}
+              ) : null}
             </div>
           </div>
 

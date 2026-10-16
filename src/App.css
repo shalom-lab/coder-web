@@ -144,7 +144,27 @@ body {
 .panel-header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  min-width: 52px;
+  min-height: 22px;
+}
+
+.header-chip-btn {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.4;
+  background: var(--border);
+  color: var(--text-muted);
+  border: none;
+}
+
+.header-chip-btn:hover:not(:disabled) {
+  background: rgba(13, 148, 136, 0.15);
+  color: var(--text-main);
+  border-color: transparent;
 }
 
 .panel-footer {
@@ -452,7 +472,7 @@ button.ghost {
 
 .storage-row {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) minmax(140px, 2fr);
+  grid-template-columns: minmax(110px, 160px) minmax(0, 1fr);
   gap: 6px;
   align-items: center;
 }

@@ -71,10 +71,32 @@ export function RulesUiEditor({ rules, onChange }: Props) {
     updateRule(ruleIndex, { storage: rowsToStorage(rows) })
   }
 
+  const defaultStorage = (): StorageItem[] => [
+    { 'gh-name-repo': 'shalom-lab/repo' },
+    { 'gh-name-token': '' },
+  ]
+
   const addRule = () => {
-    const next: Rule[] = [...rules, { urlpattern: '', storage: [{}] }]
+    const next: Rule[] = [
+      ...rules,
+      { urlpattern: '', storage: defaultStorage() },
+    ]
     onChange(next)
     setOpenSet((prev) => new Set(prev).add(next.length - 1))
+  }
+
+  const addStorageRow = (ruleIndex: number, rows: { key: string; valueText: string }[]) => {
+    const keys = new Set(rows.map((r) => r.key.trim()))
+    let key = 'gh-name-repo'
+    let valueText = 'shalom-lab/repo'
+    if (keys.has('gh-name-repo') && !keys.has('gh-name-token')) {
+      key = 'gh-name-token'
+      valueText = ''
+    } else if (keys.has('gh-name-repo') && keys.has('gh-name-token')) {
+      key = ''
+      valueText = ''
+    }
+    updateStorageRows(ruleIndex, [...rows, { key, valueText }])
   }
 
   return (
@@ -156,9 +178,7 @@ export function RulesUiEditor({ rules, onChange }: Props) {
                     <button
                       type="button"
                       className="add-row-btn"
-                      onClick={() =>
-                        updateStorageRows(ruleIndex, [...rows, { key: '', valueText: '' }])
-                      }
+                      onClick={() => addStorageRow(ruleIndex, rows)}
                     >
                       + 新增 storage
                     </button>
