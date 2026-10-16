@@ -314,8 +314,15 @@ button.ghost {
   color: #fff;
 }
 
+.mode-tab.is-active:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+  border-color: transparent;
+}
+
 .mode-tab:hover:not(:disabled):not(.is-active) {
   background: rgba(13, 148, 136, 0.08);
+  color: var(--text-main);
   border-color: transparent;
 }
 

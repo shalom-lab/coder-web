@@ -79,7 +79,7 @@ export function RulesUiEditor({ rules, onChange }: Props) {
   const addRule = () => {
     const next: Rule[] = [
       ...rules,
-      { urlpattern: '', storage: defaultStorage() },
+      { urlpattern: 'github.io/', storage: defaultStorage() },
     ]
     onChange(next)
     setOpenSet((prev) => new Set(prev).add(next.length - 1))

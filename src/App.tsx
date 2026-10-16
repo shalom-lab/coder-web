@@ -68,6 +68,8 @@ export default function App() {
   const [output, setOutput] = useState('')
   const [toast, setToast] = useState({ message: '', visible: false })
   const [fileSha, setFileSha] = useState<string | undefined>()
+  /** 最近一次拉取/保存到云端的规范化 JSON；null 表示本会话尚未与云端同步 */
+  const [cloudSnapshot, setCloudSnapshot] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const showToast = useCallback((message: string) => {
@@ -190,7 +192,9 @@ export default function App() {
     setBusy(true)
     try {
       const { content, sha } = await fetchRepoFile(byok, REPO_FILE)
-      setJsonText(prettyJson(rulesFromFileContent(content)))
+      const formatted = prettyJson(rulesFromFileContent(content))
+      setJsonText(formatted)
+      setCloudSnapshot(formatted)
       setFileSha(sha)
       showToast('已从仓库拉取')
     } catch (e) {
@@ -217,6 +221,9 @@ export default function App() {
       const sha = fileSha ?? (await tryGetFileSha(byok, REPO_FILE))
       await putRepoFile(byok, REPO_FILE, formatted, `update ${REPO_FILE}`, sha)
       const latest = await fetchRepoFile(byok, REPO_FILE)
+      const synced = prettyJson(rulesFromFileContent(latest.content))
+      setJsonText(synced)
+      setCloudSnapshot(synced)
       setFileSha(latest.sha)
       showToast(`已保存到 ${byok.repo}/${REPO_FILE}`)
     } catch (e) {
@@ -227,7 +234,18 @@ export default function App() {
   }
 
   const byokReady = Boolean(byok.repo && byok.token)
-  const canSave = jsonText.trim().length > 0
+  const hasJson = jsonText.trim().length > 0
+  let normalizedJson: string | null = null
+  try {
+    normalizedJson = prettyJson(parseRulesJson(jsonText))
+  } catch {
+    normalizedJson = null
+  }
+  const isDirty =
+    cloudSnapshot === null
+      ? hasJson
+      : normalizedJson !== null && normalizedJson !== cloudSnapshot
+  const canSaveToCloud = hasJson && isDirty && normalizedJson !== null
   const bookmarkName = name.trim() || 'Go'
 
   return (
@@ -331,16 +349,22 @@ export default function App() {
               <button
                 type="button"
                 className="primary"
-                disabled={busy || !canSave}
+                disabled={busy || !canSaveToCloud}
                 onClick={handleSave}
-                title={byokReady ? `保存到 ${byok.repo}/${REPO_FILE}` : '需先配置 BYOK'}
+                title={
+                  !byokReady
+                    ? '需先配置 BYOK'
+                    : !isDirty
+                      ? '内容未改动'
+                      : `保存到 ${byok.repo}/${REPO_FILE}`
+                }
               >
                 保存到云端
               </button>
               <button type="button" onClick={handleImport}>
                 导入
               </button>
-              <button type="button" disabled={!canSave} onClick={handleExportLocal}>
+              <button type="button" disabled={!hasJson} onClick={handleExportLocal}>
                 导出
               </button>
               <button type="button" onClick={handleClear}>
