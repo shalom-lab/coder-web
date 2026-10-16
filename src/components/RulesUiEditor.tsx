@@ -77,25 +77,13 @@ export function RulesUiEditor({ rules, onChange }: Props) {
     setOpenSet((prev) => new Set(prev).add(next.length - 1))
   }
 
-  const removeRule = (index: number) => {
-    onChange(rules.filter((_, i) => i !== index))
-    setOpenSet((prev) => {
-      const next = new Set<number>()
-      for (const i of prev) {
-        if (i < index) next.add(i)
-        else if (i > index) next.add(i - 1)
-      }
-      return next
-    })
-  }
-
   return (
     <div className="rules-ui">
       {rules.length === 0 ? (
         <p className="rules-ui-empty">暂无规则，点击下方「新增规则」开始</p>
       ) : null}
 
-      <div className="accordion-list">
+      <div className="rules-ui-scroll">
         {rules.map((rule, ruleIndex) => {
           const open = openSet.has(ruleIndex)
           const rows = flattenStorage(rule.storage)
@@ -106,32 +94,20 @@ export function RulesUiEditor({ rules, onChange }: Props) {
               key={ruleIndex}
               className={`accordion-item${open ? ' is-open' : ''}`}
             >
-              <div className="accordion-header">
-                <button
-                  type="button"
-                  className="accordion-toggle"
-                  aria-expanded={open}
-                  onClick={() => toggle(ruleIndex)}
-                >
-                  <span className="accordion-chevron" aria-hidden>
-                    {open ? '▾' : '▸'}
-                  </span>
-                  <span className="accordion-title" title={label}>
-                    {label}
-                  </span>
-                  <span className="accordion-meta">{rows.length} 项</span>
-                </button>
-                <button
-                  type="button"
-                  className="ghost danger-btn"
-                  title="删除规则"
-                  onClick={() => {
-                    if (window.confirm(`删除规则「${label}」？`)) removeRule(ruleIndex)
-                  }}
-                >
-                  删除
-                </button>
-              </div>
+              <button
+                type="button"
+                className="accordion-toggle"
+                aria-expanded={open}
+                onClick={() => toggle(ruleIndex)}
+              >
+                <span className="accordion-chevron" aria-hidden>
+                  {open ? '▾' : '▸'}
+                </span>
+                <span className="accordion-title" title={label}>
+                  {label}
+                </span>
+                <span className="accordion-meta">{rows.length} 项</span>
+              </button>
 
               {open ? (
                 <div className="accordion-body">
@@ -175,19 +151,6 @@ export function RulesUiEditor({ rules, onChange }: Props) {
                             updateStorageRows(ruleIndex, next)
                           }}
                         />
-                        <button
-                          type="button"
-                          className="ghost danger-btn"
-                          title="删除此项"
-                          onClick={() => {
-                            updateStorageRows(
-                              ruleIndex,
-                              rows.filter((_, i) => i !== rowIndex),
-                            )
-                          }}
-                        >
-                          ×
-                        </button>
                       </div>
                     ))}
                     <button
@@ -205,12 +168,12 @@ export function RulesUiEditor({ rules, onChange }: Props) {
             </div>
           )
         })}
-      </div>
 
-      <div className="rules-ui-footer">
-        <button type="button" className="primary" onClick={addRule}>
-          + 新增规则
-        </button>
+        <div className="rules-ui-add">
+          <button type="button" className="primary" onClick={addRule}>
+            + 新增规则
+          </button>
+        </div>
       </div>
     </div>
   )
