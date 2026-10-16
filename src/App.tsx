@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
+import { RulesUiEditor } from './components/RulesUiEditor'
 import { Settings } from './components/Settings'
 import { Toast } from './components/Toast'
 import {
   CACHE_KEYS,
   DEFAULT_RULES,
   REPO_FILE,
+  assertRulesReady,
   generateFromRules,
   parseRulesJson,
   prettyJson,
   rulesFromFileContent,
+  type Rule,
 } from './lib/bookmarklet'
 import { readByok, type ByokSettings } from './lib/byok'
 import { fetchRepoFile, putRepoFile, tryGetFileSha } from './lib/github'
 import './App.css'
+
+type EditorMode = 'json' | 'ui'
 
 /** React 会拦截 href="javascript:..."，必须用 setAttribute 才能拖成书签 */
 function BookmarkDragLink({
@@ -59,6 +64,7 @@ export default function App() {
     if (cached) return cached
     return prettyJson(DEFAULT_RULES)
   })
+  const [editorMode, setEditorMode] = useState<EditorMode>('json')
   const [output, setOutput] = useState('')
   const [toast, setToast] = useState({ message: '', visible: false })
   const [fileSha, setFileSha] = useState<string | undefined>()
@@ -71,6 +77,33 @@ export default function App() {
   const hideToast = useCallback(() => {
     setToast((t) => ({ ...t, visible: false }))
   }, [])
+
+  let uiRules: Rule[] | null = null
+  try {
+    uiRules = parseRulesJson(jsonText)
+  } catch {
+    uiRules = null
+  }
+
+  const switchMode = (mode: EditorMode) => {
+    if (mode === editorMode) return
+    if (mode === 'ui') {
+      try {
+        const rules = parseRulesJson(jsonText)
+        setJsonText(prettyJson(rules))
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : 'JSON 无效，无法切换到 UI')
+        return
+      }
+    } else if (uiRules) {
+      setJsonText(prettyJson(uiRules))
+    }
+    setEditorMode(mode)
+  }
+
+  const handleUiRulesChange = (rules: Rule[]) => {
+    setJsonText(prettyJson(rules))
+  }
 
   useEffect(() => {
     localStorage.setItem(CACHE_KEYS.rules, jsonText)
@@ -141,6 +174,7 @@ export default function App() {
   const handleGenerate = async () => {
     try {
       const rules = parseRulesJson(jsonText)
+      assertRulesReady(rules)
       const formatted = prettyJson(rules)
       setJsonText(formatted)
       const url = generateFromRules(rules)
@@ -175,7 +209,9 @@ export default function App() {
     }
     setBusy(true)
     try {
-      const formatted = prettyJson(parseRulesJson(jsonText))
+      const rules = parseRulesJson(jsonText)
+      assertRulesReady(rules)
+      const formatted = prettyJson(rules)
       setJsonText(formatted)
       // 私库已有文件时更新必须带 sha；先探测，避免无权限时被误当成「文件不存在」
       const sha = fileSha ?? (await tryGetFileSha(byok, REPO_FILE))
@@ -213,7 +249,27 @@ export default function App() {
         <section className="panel">
           <div className="panel-header">
             <div className="panel-title">
-              <span>规则 JSON</span>
+              <span>规则</span>
+              <div className="mode-tabs" role="tablist" aria-label="编辑模式">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={editorMode === 'json'}
+                  className={editorMode === 'json' ? 'mode-tab is-active' : 'mode-tab'}
+                  onClick={() => switchMode('json')}
+                >
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={editorMode === 'ui'}
+                  className={editorMode === 'ui' ? 'mode-tab is-active' : 'mode-tab'}
+                  onClick={() => switchMode('ui')}
+                >
+                  UI
+                </button>
+              </div>
               <div className="name-input-group">
                 <span>名称:</span>
                 <input
@@ -225,34 +281,48 @@ export default function App() {
               </div>
             </div>
             <div className="panel-header-actions">
-              <span className="tag">JSON</span>
-              <button type="button" onClick={formatJson}>
-                格式化
-              </button>
+              {editorMode === 'json' ? (
+                <button type="button" onClick={formatJson}>
+                  格式化
+                </button>
+              ) : (
+                <span className="tag">手风琴</span>
+              )}
             </div>
           </div>
 
           <div className="editor-wrap">
-            <Editor
-              height="100%"
-              defaultLanguage="json"
-              theme="vs-dark"
-              value={jsonText}
-              onChange={(v) => setJsonText(v ?? '')}
-              options={{
-                fontSize: 13,
-                fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                tabSize: 2,
-                formatOnPaste: true,
-                wordWrap: 'on',
-                lineNumbers: 'on',
-                renderLineHighlight: 'line',
-                bracketPairColorization: { enabled: true },
-              }}
-            />
+            {editorMode === 'json' ? (
+              <Editor
+                height="100%"
+                defaultLanguage="json"
+                theme="vs-dark"
+                value={jsonText}
+                onChange={(v) => setJsonText(v ?? '')}
+                options={{
+                  fontSize: 13,
+                  fontFamily: "'Fira Code', Consolas, 'Courier New', monospace",
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  tabSize: 2,
+                  formatOnPaste: true,
+                  wordWrap: 'on',
+                  lineNumbers: 'on',
+                  renderLineHighlight: 'line',
+                  bracketPairColorization: { enabled: true },
+                }}
+              />
+            ) : uiRules ? (
+              <RulesUiEditor rules={uiRules} onChange={handleUiRulesChange} />
+            ) : (
+              <div className="rules-ui-error">
+                <p>当前 JSON 无法解析，请先切回 JSON 模式修复。</p>
+                <button type="button" onClick={() => setEditorMode('json')}>
+                  返回 JSON
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="panel-footer">

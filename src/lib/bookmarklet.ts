@@ -31,6 +31,7 @@ export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+/** 结构校验（允许编辑中的空 urlpattern）；生成/保存前再调 assertRulesReady */
 export function parseRulesJson(text: string): Rule[] {
   const data = JSON.parse(text) as unknown
   if (!Array.isArray(data)) {
@@ -41,14 +42,25 @@ export function parseRulesJson(text: string): Rule[] {
       throw new Error('每条规则必须是对象')
     }
     const rule = item as Partial<Rule>
-    if (typeof rule.urlpattern !== 'string' || !rule.urlpattern.trim()) {
-      throw new Error('每条规则需要非空 urlpattern')
+    if (typeof rule.urlpattern !== 'string') {
+      throw new Error('每条规则需要 urlpattern 字符串')
     }
     if (!Array.isArray(rule.storage)) {
       throw new Error('每条规则需要 storage 数组')
     }
   }
   return data as Rule[]
+}
+
+export function assertRulesReady(rules: Rule[]): void {
+  if (rules.length === 0) {
+    throw new Error('至少需要一条规则')
+  }
+  for (const rule of rules) {
+    if (!rule.urlpattern.trim()) {
+      throw new Error('每条规则需要非空 urlpattern')
+    }
+  }
 }
 
 /** 括号匹配取出数组字面量（跳过字符串） */
