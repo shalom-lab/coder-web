@@ -72,7 +72,7 @@ export function RulesUiEditor({ rules, onChange }: Props) {
   }
 
   const defaultStorage = (): StorageItem[] => [
-    { 'gh-name-repo': 'shalom-lab/repo' },
+    { 'gh-name-repo': 'shalom-lab/' },
     { 'gh-name-token': '' },
   ]
 
@@ -88,7 +88,7 @@ export function RulesUiEditor({ rules, onChange }: Props) {
   const addStorageRow = (ruleIndex: number, rows: { key: string; valueText: string }[]) => {
     const keys = new Set(rows.map((r) => r.key.trim()))
     let key = 'gh-name-repo'
-    let valueText = 'shalom-lab/repo'
+    let valueText = 'shalom-lab/'
     if (keys.has('gh-name-repo') && !keys.has('gh-name-token')) {
       key = 'gh-name-token'
       valueText = ''
