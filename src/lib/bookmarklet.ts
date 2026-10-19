@@ -25,10 +25,21 @@ export const DEFAULT_RULES: Rule[] = [
 export const CACHE_KEYS = {
   rules: 'coder_rules_cache',
   name: 'coder_name_cache',
+  /** 最近一次与云端一致的规范化 rules JSON */
+  cloudSnapshot: 'coder_rules_cloud_snapshot',
 } as const
 
 export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
+}
+
+/** 能解析则返回 pretty JSON，否则 null */
+export function normalizeRulesText(text: string): string | null {
+  try {
+    return prettyJson(parseRulesJson(text))
+  } catch {
+    return null
+  }
 }
 
 /** 结构校验（允许编辑中的空 urlpattern）；生成/保存前再调 assertRulesReady */

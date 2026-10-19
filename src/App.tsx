@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor, { type OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
 import { RulesUiEditor } from './components/RulesUiEditor'
 import { Settings } from './components/Settings'
 import { Toast } from './components/Toast'
@@ -9,6 +10,7 @@ import {
   REPO_FILE,
   assertRulesReady,
   generateFromRules,
+  normalizeRulesText,
   parseRulesJson,
   prettyJson,
   rulesFromFileContent,
@@ -61,16 +63,51 @@ export default function App() {
   const [name, setName] = useState(() => localStorage.getItem(CACHE_KEYS.name) || 'Go')
   const [jsonText, setJsonText] = useState(() => {
     const cached = localStorage.getItem(CACHE_KEYS.rules)
-    if (cached) return cached
-    return prettyJson(DEFAULT_RULES)
+    if (!cached) return prettyJson(DEFAULT_RULES)
+    return normalizeRulesText(cached) ?? cached
   })
-  const [editorMode, setEditorMode] = useState<EditorMode>('json')
+  const [editorMode, setEditorMode] = useState<EditorMode>('ui')
   const [output, setOutput] = useState('')
   const [toast, setToast] = useState({ message: '', visible: false })
   const [fileSha, setFileSha] = useState<string | undefined>()
-  /** 最近一次拉取/保存到云端的规范化 JSON；null 表示本会话尚未与云端同步 */
-  const [cloudSnapshot, setCloudSnapshot] = useState<string | null>(null)
+  const monacoRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+
+  const scrollJsonToEnd = useCallback(() => {
+    const ed = monacoRef.current
+    if (!ed) return
+    const model = ed.getModel()
+    if (!model) return
+    const lastLine = model.getLineCount()
+    ed.revealLine(lastLine)
+    ed.setScrollTop(ed.getScrollHeight())
+  }, [])
+
+  const handleEditorMount: OnMount = (ed) => {
+    monacoRef.current = ed
+    // 切到 JSON 时编辑器会挂载：默认滚到末尾；之后用户可自行滚动
+    requestAnimationFrame(() => scrollJsonToEnd())
+  }
+  /**
+   * 仅在真正拉取/保存成功后写入；刷新后从专用 key 恢复。
+   * 禁止用本地草稿冒充，否则会误判「未改动」导致无法保存。
+   */
+  const [cloudSnapshot, setCloudSnapshot] = useState<string | null>(() => {
+    const saved = localStorage.getItem(CACHE_KEYS.cloudSnapshot)
+    if (!saved) return null
+    return normalizeRulesText(saved) ?? null
+  })
   const [busy, setBusy] = useState(false)
+
+  const rememberCloudSnapshot = useCallback((formatted: string) => {
+    const normalized = normalizeRulesText(formatted) ?? formatted
+    setCloudSnapshot(normalized)
+    localStorage.setItem(CACHE_KEYS.cloudSnapshot, normalized)
+  }, [])
+
+  const clearCloudSnapshot = useCallback(() => {
+    setCloudSnapshot(null)
+    localStorage.removeItem(CACHE_KEYS.cloudSnapshot)
+  }, [])
 
   const showToast = useCallback((message: string) => {
     setToast({ message, visible: true })
@@ -108,7 +145,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    localStorage.setItem(CACHE_KEYS.rules, jsonText)
+    // 能解析则存规范化结果，避免格式残留；解析失败仍存原文以免丢草稿
+    localStorage.setItem(CACHE_KEYS.rules, normalizeRulesText(jsonText) ?? jsonText)
   }, [jsonText])
 
   useEffect(() => {
@@ -164,13 +202,15 @@ export default function App() {
     }
   }
 
+  /** 仅清空本机编辑器与本地缓存，不改云端 rules.json */
   const handleClear = () => {
-    if (!window.confirm('确定清空吗？')) return
+    if (!window.confirm('仅清空本地编辑内容（不会删除云端），确定？')) return
     setJsonText(prettyJson(DEFAULT_RULES))
     setOutput('')
     setFileSha(undefined)
     localStorage.removeItem(CACHE_KEYS.rules)
-    showToast('已重置为默认规则')
+    clearCloudSnapshot()
+    showToast('已清空本地，云端未改动')
   }
 
   const handleGenerate = async () => {
@@ -194,7 +234,7 @@ export default function App() {
       const { content, sha } = await fetchRepoFile(byok, REPO_FILE)
       const formatted = prettyJson(rulesFromFileContent(content))
       setJsonText(formatted)
-      setCloudSnapshot(formatted)
+      rememberCloudSnapshot(formatted)
       setFileSha(sha)
       showToast('已从仓库拉取')
     } catch (e) {
@@ -223,7 +263,7 @@ export default function App() {
       const latest = await fetchRepoFile(byok, REPO_FILE)
       const synced = prettyJson(rulesFromFileContent(latest.content))
       setJsonText(synced)
-      setCloudSnapshot(synced)
+      rememberCloudSnapshot(synced)
       setFileSha(latest.sha)
       showToast(`已保存到 ${byok.repo}/${REPO_FILE}`)
     } catch (e) {
@@ -235,12 +275,7 @@ export default function App() {
 
   const byokReady = Boolean(byok.repo && byok.token)
   const hasJson = jsonText.trim().length > 0
-  let normalizedJson: string | null = null
-  try {
-    normalizedJson = prettyJson(parseRulesJson(jsonText))
-  } catch {
-    normalizedJson = null
-  }
+  const normalizedJson = normalizeRulesText(jsonText)
   const isDirty =
     cloudSnapshot === null
       ? hasJson
@@ -314,6 +349,7 @@ export default function App() {
                 defaultLanguage="json"
                 theme="vs-dark"
                 value={jsonText}
+                onMount={handleEditorMount}
                 onChange={(v) => setJsonText(v ?? '')}
                 options={{
                   fontSize: 13,
@@ -367,8 +403,12 @@ export default function App() {
               <button type="button" disabled={!hasJson} onClick={handleExportLocal}>
                 导出
               </button>
-              <button type="button" onClick={handleClear}>
-                清空
+              <button
+                type="button"
+                onClick={handleClear}
+                title="仅清空本机内容，不影响云端"
+              >
+                本地清空
               </button>
             </div>
           </div>
