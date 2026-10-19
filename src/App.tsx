@@ -229,9 +229,17 @@ export default function App() {
   }
 
   const pullFromGithub = async () => {
+    // 每次从 localStorage 重读，避免 React 状态里 token 过期/被误清空
+    const settings = readByok()
+    setByok(settings)
+    if (!settings.repo || !settings.token) {
+      showToast('请先在设置中配置仓库与 Token')
+      setSettingsOpen(true)
+      return
+    }
     setBusy(true)
     try {
-      const { content, sha } = await fetchRepoFile(byok, REPO_FILE)
+      const { content, sha } = await fetchRepoFile(settings, REPO_FILE)
       const formatted = prettyJson(rulesFromFileContent(content))
       setJsonText(formatted)
       rememberCloudSnapshot(formatted)
@@ -246,7 +254,9 @@ export default function App() {
 
   /** 保存 = 写入仓库根目录 rules.json（仅规则数据） */
   const handleSave = async () => {
-    if (!byok.repo || !byok.token) {
+    const settings = readByok()
+    setByok(settings)
+    if (!settings.repo || !settings.token) {
       showToast('请先在设置中配置仓库与 Token')
       setSettingsOpen(true)
       return
@@ -258,14 +268,14 @@ export default function App() {
       const formatted = prettyJson(rules)
       setJsonText(formatted)
       // 私库已有文件时更新必须带 sha；先探测，避免无权限时被误当成「文件不存在」
-      const sha = fileSha ?? (await tryGetFileSha(byok, REPO_FILE))
-      await putRepoFile(byok, REPO_FILE, formatted, `update ${REPO_FILE}`, sha)
-      const latest = await fetchRepoFile(byok, REPO_FILE)
+      const sha = fileSha ?? (await tryGetFileSha(settings, REPO_FILE))
+      await putRepoFile(settings, REPO_FILE, formatted, `update ${REPO_FILE}`, sha)
+      const latest = await fetchRepoFile(settings, REPO_FILE)
       const synced = prettyJson(rulesFromFileContent(latest.content))
       setJsonText(synced)
       rememberCloudSnapshot(synced)
       setFileSha(latest.sha)
-      showToast(`已保存到 ${byok.repo}/${REPO_FILE}`)
+      showToast(`已保存到 ${settings.repo}/${REPO_FILE}`)
     } catch (e) {
       showToast(e instanceof Error ? e.message : '保存失败')
     } finally {
@@ -385,11 +395,11 @@ export default function App() {
               <button
                 type="button"
                 className="primary"
-                disabled={busy || !canSaveToCloud}
+                disabled={busy || !byokReady || !canSaveToCloud}
                 onClick={handleSave}
                 title={
                   !byokReady
-                    ? '需先配置 BYOK'
+                    ? '需先配置仓库与 Token'
                     : !isDirty
                       ? '内容未改动'
                       : `保存到 ${byok.repo}/${REPO_FILE}`

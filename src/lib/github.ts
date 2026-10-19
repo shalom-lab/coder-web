@@ -3,9 +3,13 @@ import type { ByokSettings } from './byok'
 const API = 'https://api.github.com'
 
 function headers(token: string): HeadersInit {
+  const t = token.trim()
+  if (!t) {
+    throw new Error('缺少 Token，请到设置里填写 gh-coder-token')
+  }
   return {
     Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token.trim()}`,
+    Authorization: `Bearer ${t}`,
     'X-GitHub-Api-Version': '2022-11-28',
   }
 }

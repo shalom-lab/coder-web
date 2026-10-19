@@ -32,9 +32,14 @@ export function Settings({ open, onClose, onSaved }: Props) {
   if (!open) return null
 
   const handleSave = () => {
+    // 密码框默认为空：未填新 token 时保留已保存值，避免误清空导致 401
     const next: ByokSettings = {
       repo: repo.trim(),
-      token: tokenDirty ? token.trim() : saved.token,
+      token: (tokenDirty ? token.trim() : saved.token) || saved.token,
+    }
+    if (!next.repo || !next.token) {
+      window.alert('请填写仓库（owner/name）与 Token')
+      return
     }
     saveByok(next)
     onSaved(next)
